@@ -1,0 +1,57 @@
+# Caddy Reverse Proxy — Sample Config
+
+This is a sanitized version of the Caddy configuration used on a Debian VPS. Services run on localhost-bound ports and are reverse-proxied through Caddy, which terminates TLS automatically via Let's Encrypt.
+
+```
+# -- Global settings ----------------------------------------------------------
+# No global email needed — Caddy 2+ uses Let's Encrypt with HTTP-01 by default.
+
+# -- Admin dashboard (bound to tailnet only) ----------------------------------
+:8110 {
+    bind 127.0.0.1
+    root * /var/www/dashboard
+    file_server
+}
+
+# -- Web project preview (dev server upstream) ---------------------------------
+:8100 {
+    bind 127.0.0.1
+    reverse_proxy 127.0.0.1:8099
+}
+
+# -- Second web project preview ------------------------------------------------
+:8102 {
+    bind 127.0.0.1
+    reverse_proxy 127.0.0.1:8101
+}
+
+# -- Example public site block (domain replaced) -------------------------------
+# example.com {
+#     root * /var/www/example
+#     file_server
+#     # TLS is automatic — Caddy requests + renews the cert
+# }
+```
+
+## Key Patterns
+
+- **All services bind to 127.0.0.1** — no service is directly reachable on the public interface
+- Caddy binds to `0.0.0.0:80/443` for the public-facing blocks; internal ones bind only to loopback
+- **No manual cert renewal** — Caddy handles everything via ACME
+- The VPS itself enforces UFW default-deny, allowing only ports 22, 80, 443 (and Tailscale UDP)
+
+## UFW Rules (on the VPS)
+
+```
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow in on tailscale0
+ufw enable
+```
+
+## fail2ban
+
+Active jails: `sshd`, `caddy` (brute-force protection on auth endpoints if enabled). Custom jail config in `/etc/fail2ban/jail.local`.
